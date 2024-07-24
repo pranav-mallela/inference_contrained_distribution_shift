@@ -453,10 +453,15 @@ class SemiSyntheticRestrictions(Restrictions):
 
         all_cov_restrictions = []
         for cov_vars in all_cov_vars:
-            y_00_val_1 = y_00_val_1_df.cov().loc[*cov_vars]
-            y_01_val_1 = y_01_val_1_df.cov().loc[*cov_vars]
-            y_00_val_2 = y_00_val_2_df.cov().loc[*cov_vars]
-            y_01_val_2 = y_01_val_2_df.cov().loc[*cov_vars]
+            cov_vars_unpacked = [*cov_vars]
+            y_00_val_1 = y_00_val_1_df.cov().loc[cov_vars_unpacked]
+            y_01_val_1 = y_01_val_1_df.cov().loc[cov_vars_unpacked]
+            y_00_val_2 = y_00_val_2_df.cov().loc[cov_vars_unpacked]
+            y_01_val_2 = y_01_val_2_df.cov().loc[cov_vars_unpacked]
+            # y_00_val_1 = y_00_val_1_df.cov().loc[*cov_vars]
+            # y_01_val_1 = y_01_val_1_df.cov().loc[*cov_vars]
+            # y_00_val_2 = y_00_val_2_df.cov().loc[*cov_vars]
+            # y_01_val_2 = y_01_val_2_df.cov().loc[*cov_vars]
 
             restriction_00 = np.array([y_00_val_1, y_00_val_2])
             restriction_01 = np.array([y_01_val_1, y_01_val_2])

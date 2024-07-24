@@ -65,27 +65,27 @@ def generate_constraints_plots(
         )
         & (plotting_df["matrix_type"] == "unrestricted")
         & (plotting_df["restriction_type"] == "count"),
-        ("separable", "DRO_worst_case"): (
-            plotting_df["step"]
-            == max_steps.loc[("separable", "DRO_worst_case"), "step"]
-        )
-        & (plotting_df["matrix_type"] == "separable")
-        & (plotting_df["restriction_type"] == "DRO_worst_case"),
-        ("separable", "count"): (
-            plotting_df["step"] == max_steps.loc[("separable", "count"), "step"]
-        )
-        & (plotting_df["matrix_type"] == "separable")
-        & (plotting_df["restriction_type"] == "count"),
-        ("targeted", "DRO_worst_case"): (
-            plotting_df["step"] == max_steps.loc[("targeted", "DRO_worst_case"), "step"]
-        )
-        & (plotting_df["matrix_type"] == "targeted")
-        & (plotting_df["restriction_type"] == "DRO_worst_case"),
-        ("targeted", "count"): (
-            plotting_df["step"] == max_steps.loc[("targeted", "count"), "step"]
-        )
-        & (plotting_df["matrix_type"] == "targeted")
-        & (plotting_df["restriction_type"] == "count"),
+        # ("separable", "DRO_worst_case"): (
+        #     plotting_df["step"]
+        #     == max_steps.loc[("separable", "DRO_worst_case"), "step"]
+        # )
+        # & (plotting_df["matrix_type"] == "separable")
+        # & (plotting_df["restriction_type"] == "DRO_worst_case"),
+        # ("separable", "count"): (
+        #     plotting_df["step"] == max_steps.loc[("separable", "count"), "step"]
+        # )
+        # & (plotting_df["matrix_type"] == "separable")
+        # & (plotting_df["restriction_type"] == "count"),
+        # ("targeted", "DRO_worst_case"): (
+        #     plotting_df["step"] == max_steps.loc[("targeted", "DRO_worst_case"), "step"]
+        # )
+        # & (plotting_df["matrix_type"] == "targeted")
+        # & (plotting_df["restriction_type"] == "DRO_worst_case"),
+        # ("targeted", "count"): (
+        #     plotting_df["step"] == max_steps.loc[("targeted", "count"), "step"]
+        # )
+        # & (plotting_df["matrix_type"] == "targeted")
+        # & (plotting_df["restriction_type"] == "count"),
     }
 
     plot_intervals(ax=ax, masks=masks, plotting_df=plotting_df, color="C0")

@@ -66,8 +66,28 @@ class SimulationLoader(DatasetLoader):
 
         mu2 = expit((X + X_2) / 2 - A)
         y2 = 1 * (mu2 > self.rng.uniform(size=self.dataset_size))
+        
+        # Single Variable - Indirect Dependency: Jul23-2020, Jul23-0957
+        # obs = expit(A) > self.rng.uniform(size=self.dataset_size)
+        
+        # Single Variable: Jul23-0956, Jul23-0957
+        # obs = expit(X) > self.rng.uniform(size=self.dataset_size)
+        
+        # Changed Function 2: Jul22-2219, Jul22-2220
+        # obs = expit(A + y2) > self.rng.uniform(size=self.dataset_size)
 
+        # Remove Direct Dependency: Jul22-2006, Jul22-2008; Jul23-0924, Jul23-0925
+        # obs = expit(A - y2) > self.rng.uniform(size=self.dataset_size)
+
+        # Inverse Dependency: Jul22-1858
+        # obs = expit(X_2 - X) > self.rng.uniform(size=self.dataset_size)
+
+        # Changed Function: Jul22-1939, Jul22-1941
+        # obs = expit(X + X_2) > self.rng.uniform(size=self.dataset_size)
+
+        # Original: Jul22-1921, Jul22-1925; Jul24-0846, Jul24-0847
         obs = expit(X - X_2) > self.rng.uniform(size=self.dataset_size)
+
         X_total = np.stack((X, X_2), axis=-1)
 
         return X_total, A, y, obs, y2
