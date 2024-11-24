@@ -1,0 +1,19 @@
+{
+    "random_seeds": [
+        1
+    ],
+    "dataset_type": "simulation",
+    "correlation_coeff": 1,
+    "dataset_size": 100000,
+    "feature_names": null,
+    "states": null,
+    "n_trials": 1,
+    "n_optim_iters": 3000,
+    "restriction_trials": [
+        "count"
+    ],
+    "matrix_types": [
+        "unrestricted"
+    ],
+    "statistic": "conditional_mean"
+}

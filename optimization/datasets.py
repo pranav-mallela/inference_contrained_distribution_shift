@@ -117,7 +117,27 @@ class SimulationLoader(DatasetLoader):
         """
         conditional_mean = (y * A).sum()
         return conditional_mean / A.sum()
+    
+    def _get_aggregate_metrics(self, d, r):
+        total = 1e6
+        ratios = [[50, 20, 15, 10, 5],
+                  [50, 20, 15, 10, 5],
+                  [50, 20, 15, 10, 5],
+                  [50, 20, 15, 10, 5],
+                  [50, 20, 15, 10, 5]]
+        num_d = len(list(set(d)))
+        num_r = len(list(set(r)))
+        agg_metric = [[None]*num_r for _ in num_d]
 
+        for di, ri in zip(d, r):
+            agg_metric[di][ri] += 1
+        
+        for di, ri in zip(d, r):
+            agg_metric[di][ri] /= (ratios[di][ri]/100)*total
+
+        return agg_metric        
+
+    # modified to read our abm data file!
     def load(self) -> Dataset:
         levels = [
             ["female", "male"],
@@ -127,27 +147,54 @@ class SimulationLoader(DatasetLoader):
 
         levels_colinear = levels
 
-        X_raw, A_raw, y_raw, obs, y_2_raw = self._simulate_dataset()
+        # X_raw, A_raw, y_raw, obs, y_2_raw = self._simulate_dataset()
+        total_df = pd.read_csv('abm_data.csv')
+        t_raw, d_raw, D_raw, r_raw, obs = total_df
 
-        X = X_raw[obs]
-        A = A_raw[obs]
-        y = y_raw[obs]
-        y_2 = y_2_raw[obs]
+        # X = X_raw[obs]
+        # A = A_raw[obs]
+        # y = y_raw[obs]
+        # y_2 = y_2_raw[obs]
 
-        empirical_conditional_mean = self._get_ate_conditional_mean(X[:, -1], y)
-        true_conditional_mean = self._get_ate_conditional_mean(X_raw[:, -1], y_raw)
+        t = t_raw[obs]
+        d = d_raw[obs]
+        D = D_raw[obs]
+        r = r_raw[obs]
 
-        sample_df = self._create_dataframe(X, A)
-        sample_df["Creditability"] = y
-        sample_df["other_outcome"] = y_2
+        # empirical_conditional_mean = self._get_ate_conditional_mean(X[:, -1], y)
+        # true_conditional_mean = self._get_ate_conditional_mean(X_raw[:, -1], y_raw)
 
-        population_df = self._create_dataframe(X_raw, A_raw)
-        population_df["Creditability"] = y_raw
-        population_df["other_outcome"] = y_2_raw
+        empirical_conditional_mean = self._get_aggregate_metrics(d, r)
+        true_conditional_mean = self._get_aggregate_metrics(d_raw, r_raw)
+
+        # sample_df = self._create_dataframe(X, A)
+        # sample_df["Creditability"] = y
+        # sample_df["other_outcome"] = y_2
+
+        # population_df = self._create_dataframe(X_raw, A_raw)
+        # population_df["Creditability"] = y_raw
+        # population_df["other_outcome"] = y_2_raw
+
+        population_df = total_df
+        sample_df = total_df[total_df["sampled"]]
 
         population_df_colinear = population_df.copy()
         sample_df_colinear = sample_df.copy()
 
+        # dataset = Dataset(
+        #     population_df=population_df,
+        #     sample_df=sample_df,
+        #     population_df_colinear=population_df_colinear,
+        #     sample_df_colinear=sample_df_colinear,
+        #     levels=levels,
+        #     levels_colinear=levels_colinear,
+        #     target="Creditability",
+        #     alternate_outcome="other_outcome",
+        #     empirical_conditional_mean=empirical_conditional_mean,
+        #     true_conditional_mean=true_conditional_mean,
+        # )
+        # return dataset
+    
         dataset = Dataset(
             population_df=population_df,
             sample_df=sample_df,
@@ -155,8 +202,8 @@ class SimulationLoader(DatasetLoader):
             sample_df_colinear=sample_df_colinear,
             levels=levels,
             levels_colinear=levels_colinear,
-            target="Creditability",
-            alternate_outcome="other_outcome",
+            target="",
+            alternate_outcome="",
             empirical_conditional_mean=empirical_conditional_mean,
             true_conditional_mean=true_conditional_mean,
         )
