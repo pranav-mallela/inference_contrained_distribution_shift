@@ -28,7 +28,120 @@ class DatasetLoader(ABC):
     def load(self) -> Dataset:
         pass
 
+class SimulationLoaderOurs(DatasetLoader):
+    def __init__(self, dataset_size: int, correlation_coeff: float, rng: np.random.Generator) -> None:
+        self.dataset_size = dataset_size
+        self.correlation_coeff = correlation_coeff
+        self.rng = rng
 
+    def _simulate_dataset(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """
+        Simulates the dataset with hospitalization and race probabilities.
+        
+        Returns:
+            Tuple: A tuple containing the population dataset and the observed sample dataset.
+        """
+        # Simulate population dataset
+        P = pd.DataFrame({
+            'race': self.rng.choice(['majority', 'minority'], size=self.dataset_size, p=[0.7, 0.3]),
+            'hospitalized': self.rng.choice([0, 1], size=self.dataset_size, p=[0.6, 0.4]),
+            'other_outcome': self.rng.choice([0, 1], size=self.dataset_size, p=[0.5, 0.5]) #this to match the dataset format but we are not using it
+        })
+
+        # Define observed probabilities for sampling
+        observed_probs = {
+            ('majority', 1): 0.7,
+            ('minority', 1): 0.3
+        }
+
+        # Calculate weights for biased sampling
+        def calculate_weight(row):
+            if row['hospitalized'] == 1:
+                return observed_probs.get((row['race'], row['hospitalized']), 1.0)
+            return 1.0
+
+        P['weight'] = P.apply(calculate_weight, axis=1)
+
+        # Create observed dataset Q with biased sampling
+        Q = P.sample(n=self.dataset_size, weights=P['weight'], replace=True).drop(columns=['weight'])
+        
+        return P, Q
+
+    def _create_dataframe(self, dataset: pd.DataFrame) -> pd.DataFrame:
+        """
+        Converts the dataset into a formatted dataframe.
+        
+        Args:
+            dataset (pd.DataFrame): The dataset to format.
+
+        Returns:
+            pd.DataFrame: A formatted dataframe with dummies.
+        """
+        df = pd.DataFrame()
+        df[['majority', 'minority']] = pd.get_dummies(dataset['race'])
+        df['hospitalized'] = dataset['hospitalized']
+        df['other_outcome'] = dataset['other_outcome']
+        return df
+    
+    def _get_ate_conditional_mean(self, A: np.ndarray, y: np.ndarray) -> float:
+        """Computes the ate using inverse propensity weighting.
+
+        Args:
+            A (np.ndarray): vector of observed outcomes
+            propensity_scores (_type_): Vector of propensity scores
+            y (np.ndarray): response variable
+
+        Returns
+            ate: Average treatment effect.
+        """
+        conditional_mean = (y * A).sum()
+        return conditional_mean / A.sum()
+
+    def load(self) -> Dataset:
+        """
+        Loads the population and sample datasets, computes statistics, and returns them as a Dataset object.
+        
+        Returns:
+            Dataset: A Dataset object containing population and sample data.
+        """
+        # Generate the population and observed sample datasets
+        P, Q = self._simulate_dataset()
+
+        # Create formatted dataframes
+        population_df = self._create_dataframe(P)
+        sample_df = self._create_dataframe(Q)
+        
+        print("population df: ", population_df)
+        print("sample df: ", sample_df)
+        
+        y = P['hospitalized'].values
+        y_raw = Q['hospitalized'].values
+        X = population_df[['majority', 'minority']].values  
+        X_raw = sample_df[['majority', 'minority']].values 
+        
+        levels = [
+            ['majority', 'minority'],
+        ]
+
+        empirical_conditional_mean = self._get_ate_conditional_mean(X[:, -1], y)
+        true_conditional_mean = self._get_ate_conditional_mean(X_raw[:, -1], y_raw)
+
+        # Create and return Dataset object
+        dataset = Dataset(
+            population_df=population_df,
+            sample_df=sample_df,
+            population_df_colinear=population_df,
+            sample_df_colinear=sample_df,
+            levels=levels,
+            levels_colinear=levels,
+            target='hospitalized',
+            alternate_outcome='other_outcome',
+            empirical_conditional_mean=empirical_conditional_mean,
+            true_conditional_mean=true_conditional_mean,
+        )
+        return dataset
+
+    
 class SimulationLoader(DatasetLoader):
     def __init__(
         self, dataset_size: int, correlation_coeff: float, rng: np.random.Generator
@@ -142,12 +255,16 @@ class SimulationLoader(DatasetLoader):
         sample_df["other_outcome"] = y_2
 
         population_df = self._create_dataframe(X_raw, A_raw)
+        print("population_data: ", population_df)
         population_df["Creditability"] = y_raw
         population_df["other_outcome"] = y_2_raw
 
+        print("population_data: ", population_df)
         population_df_colinear = population_df.copy()
         sample_df_colinear = sample_df.copy()
 
+        print("Population Size: ", len(population_df))
+        print("Sample size: ", len(sample_df))
         dataset = Dataset(
             population_df=population_df,
             sample_df=sample_df,
@@ -338,3 +455,4 @@ class FolktablesLoader(DatasetLoader):
             true_conditional_mean=true_conditional_mean,
         )
         return dataset
+

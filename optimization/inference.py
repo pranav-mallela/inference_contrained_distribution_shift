@@ -13,7 +13,7 @@ import pandas as pd
 import seaborn as sns
 import torch
 from config import parse_config_dict
-from datasets import FolktablesLoader, SimulationLoader
+from datasets import FolktablesLoader, SimulationLoader, SimulationLoaderOurs
 from tqdm import tqdm
 
 
@@ -226,10 +226,11 @@ def get_optimized_rho(
             q=q,
             n_sample=n_sample,
         )
-
+        
         prob = cp.Problem(cp.Minimize(objective), cvxpy_restrictions)
         prob.solve()
 
+        
         if w.value is None:
             print("\nOptimization failed.\n")
             break
@@ -297,6 +298,7 @@ def run_search(
     loss_values = []
     n_sample = data_count_1.sum() + data_count_0.sum()
 
+    print("feature_weights", feature_weights)
     for index in tqdm(
         range(n_iters), desc=f"Optimizing Upper Bound: {upper_bound}", leave=False
     ):
@@ -317,28 +319,37 @@ def run_search(
             n_sample=n_sample,
             rho=rho,
         )
-
+        print("cvxpy_restrictions: ", cvxpy_restrictions)
         prob = cp.Problem(cp.Minimize(objective), cvxpy_restrictions)
         prob.solve()
 
         if w.value is None:
             print("\nOptimization failed.\n")
             break
-
+        
+        print("Value for W", w.value)
+        
         alpha.data = torch.tensor(w.value).float()
         weights_y1 = (feature_weights @ alpha).reshape(*data_count_1.shape)
         weights_y0 = (feature_weights @ alpha).reshape(*data_count_0.shape)
+        print("weights_y1: ", weights_y1)
+        print("weights_y0: ", weights_y0)
         weighted_counts_1 = weights_y1 * data_count_1
         weighted_counts_0 = weights_y0 * data_count_0
+        print("weighted_counts_0: ", weighted_counts_0)
+        print("weighted_counts_1: ", weighted_counts_1)
 
         # ===================================#
         w_counts_1 = weighted_counts_1.select(-1, 1)
         w_counts_0 = weighted_counts_0.select(-1, 1)
+        print("w_counts_1: ", w_counts_1)
+        print("w_counts_0: ",  w_counts_0)
         # ===================================#
 
         size = w_counts_1.sum() + w_counts_0.sum()
         conditional_mean = w_counts_1.sum() / size
 
+        print("conditional mean: ", conditional_mean)
         loss = -conditional_mean if upper_bound else conditional_mean
         loss_values.append(conditional_mean.detach().numpy())
         optim.zero_grad()
@@ -402,6 +413,22 @@ if __name__ == "__main__":
                 dataset=dataset,
             )
             parametrization = constraints.SimulationParametrization(
+                matrix_type=matrix_type,
+            )
+        elif config.dataset_type == "simulation_selection_bias":
+            data_loader = SimulationLoaderOurs(
+                dataset_size=config.dataset_size,
+                correlation_coeff=config.correlation_coeff,
+                rng=rng,
+            )
+            dataset = data_loader.load()
+
+            restrictions = constraints.SimulationRestrictions(
+                restriction_type=restriction_type,
+                n_cov_pairs=config.n_cov_pairs,
+                dataset=dataset,
+            )
+            parametrization = constraints.SimulationParametrizationOurs(
                 matrix_type=matrix_type,
             )
         elif config.dataset_type == "semi-synthetic":

@@ -29,7 +29,25 @@ class Restrictions(ABC):
     ):
         pass
 
+# this is the class that we are using
+class SimulationParametrizationOurs(Parametrization):
+    def __init__(self, matrix_type: Literal["unrestricted", "separable", "targeted"]):
+        if matrix_type not in ["unrestricted", "separable", "targeted"]:
+            raise ValueError(
+                "matrix_type must be one of 'unrestricted', 'separable', 'targeted'"
+            )
+        self.matrix_type = matrix_type
 
+    def get_feature_weights(
+        self, *_: list[list[str]], **__: Callable
+    ) -> Tuple[torch.Tensor, Union[dict, None]]:
+        if self.matrix_type == "unrestricted":
+            return torch.eye(4, 4), None
+        elif self.matrix_type == "separable":
+            pass
+        elif self.matrix_type == "targeted":
+            pass
+        
 class SimulationParametrization(Parametrization):
     def __init__(self, matrix_type: Literal["unrestricted", "separable", "targeted"]):
         if matrix_type not in ["unrestricted", "separable", "targeted"]:
@@ -138,6 +156,9 @@ class SemiSyntheticParametrization(Parametrization):
             return feature_weights, hash_map
 
     def _traverse_level_combinations(self, levels: list[list[str]]) -> list[tuple]:
+        """
+        Iterates over all combinations of levels for stratification
+        """
         for combination in itertools.product(*levels):
             yield combination
 
@@ -156,6 +177,10 @@ class SimulationRestrictions(Restrictions):
     def _get_count_restrictions(
         self, data: pd.DataFrame, target: str, treatment_level: list[str]
     ) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Computes counts of specific outcome 
+        (e.g how many belong to hospitalized given that they are a minorty or majority )
+        """
         y00_val_1 = sum((data[target] == 0) & (data[treatment_level[0]] == 1))
         y01_val_1 = sum((data[target] == 1) & (data[treatment_level[0]] == 1))
 
@@ -165,6 +190,7 @@ class SimulationRestrictions(Restrictions):
         restriction_00 = np.array([y00_val_1, y00_val_2])
         restriction_01 = np.array([y01_val_1, y01_val_2])
 
+        print("Restriction Sizes: ", restriction_00.shape, restriction_01.shape)
         return restriction_00, restriction_01
 
     def build_restriction_values(self) -> None:
@@ -249,6 +275,10 @@ class SimulationRestrictions(Restrictions):
         all_covs: torch.Tensor,
         treatment_level: list[str],
     ):
+        """
+        Calculates covariance-based restrictions between features
+        (In our first case we only have race so this isn't needed)
+        """
         _, features = feature_weights.shape
         level_size = len(treatment_level)
 
@@ -285,7 +315,7 @@ class SimulationRestrictions(Restrictions):
     ) -> tuple[np.ndarray, np.ndarray]:
         _, features = feature_weights.shape
         level_size = len(treatment_level)
-
+        print('treatment_level:', treatment_level)
         y_0_ground_truth = torch.zeros(level_size, features)
         y_1_ground_truth = torch.zeros(level_size, features)
 
@@ -340,6 +370,10 @@ class SimulationRestrictions(Restrictions):
     def get_cvxpy_restrictions(
         self, cvxpy_weights, feature_weights, ratio, q, n_sample, rho=None
     ):
+        """
+        Builds constraints in the form needed for the cvxpy package 
+        which is the optimization.
+        """
         if self.restriction_values is None:
             raise ValueError("Restriction values not set. Run build_restriction_values")
         if self.restriction_matrices is None:
