@@ -42,7 +42,10 @@ class SimulationParametrizationOurs(Parametrization):
         self, *_: list[list[str]], **__: Callable
     ) -> Tuple[torch.Tensor, Union[dict, None]]:
         if self.matrix_type == "unrestricted":
-            return torch.eye(4, 4), None
+            print("Feature weights: ", torch.eye(2, 2))
+            # return torch.eye(2, 2), None
+            # return torch.eye(4, 4), None #this for [2]
+            return torch.eye(12, 12), None #this for features [2] [3] [2]
         elif self.matrix_type == "separable":
             pass
         elif self.matrix_type == "targeted":
@@ -181,8 +184,8 @@ class SimulationRestrictions(Restrictions):
         Computes counts of specific outcome 
         (e.g how many belong to hospitalized given that they are a minorty or majority )
         """
-        y00_val_1 = sum((data[target] == 0) & (data[treatment_level[0]] == 1))
-        y01_val_1 = sum((data[target] == 1) & (data[treatment_level[0]] == 1))
+        y00_val_1 = sum((data[target] == 0) & (data[treatment_level[0]] == 1)) # not hopsitalized and majority
+        y01_val_1 = sum((data[target] == 1) & (data[treatment_level[0]] == 1)) # hopsitalized and majority
 
         y00_val_2 = sum((data[target] == 0) & (data[treatment_level[1]] == 1))
         y01_val_2 = sum((data[target] == 1) & (data[treatment_level[1]] == 1))
@@ -216,6 +219,7 @@ class SimulationRestrictions(Restrictions):
                 treatment_level=self.dataset.levels_colinear[0],
             ),
         }
+        print("Built restriction_values: ", restriction_values)
 
         if self.n_cov_pairs and self.restriction_type.startswith("cov"):
             all_cov_vars = self._get_cov_pairs(
@@ -313,25 +317,42 @@ class SimulationRestrictions(Restrictions):
         counts_matrix: torch.Tensor,
         treatment_level: list[str],
     ) -> tuple[np.ndarray, np.ndarray]:
+        print("Shape of Feature weights: ", feature_weights.shape)
         _, features = feature_weights.shape
         level_size = len(treatment_level)
-        print('treatment_level:', treatment_level)
+        print("feature weights: ", feature_weights)
         y_0_ground_truth = torch.zeros(level_size, features)
         y_1_ground_truth = torch.zeros(level_size, features)
+        
+        print("y_0_ground_truth: ", y_0_ground_truth.shape)
+        print("y_1_ground_truth: ", y_1_ground_truth.shape)
 
         data_count_0 = counts_matrix[0]
         data_count_1 = counts_matrix[1]
+        
+        print("data_count_0 shape: ", data_count_0.shape)
+        print("data_count_1 shape: ", data_count_1.shape)
+        print("data_count_0: ", data_count_0)
+        print("data_count_1: ", data_count_1)
 
+        print("treatement level: ", treatment_level)
         for level in range(level_size):
+            print("level: ", level)
             t = data_count_0[level].flatten().unsqueeze(1)
+            print("t: ", t)
             features = feature_weights[level * t.shape[0] : (level + 1) * t.shape[0]]
+            print("features: ", features)
             y_0_ground_truth[level] = (features * t).sum(dim=0)
 
         for level in range(level_size):
             t_ = data_count_1[level].flatten().unsqueeze(1)
+            print("t: ", t_)
             features_ = feature_weights[level * t.shape[0] : (level + 1) * t.shape[0]]
+            print("features: ", features)
             y_1_ground_truth[level] = (features_ * t_).sum(dim=0)
 
+        print("y_0_ground_truth: ", y_0_ground_truth.numpy())
+        print("y_1_ground_truth: ", y_1_ground_truth.numpy())
         return y_0_ground_truth.numpy(), y_1_ground_truth.numpy()
 
     def build_restriction_matrices(self, feature_weights, strata_estimands):
@@ -368,7 +389,7 @@ class SimulationRestrictions(Restrictions):
         self.restriction_matrices = restriction_matrices
 
     def get_cvxpy_restrictions(
-        self, cvxpy_weights, feature_weights, ratio, q, n_sample, rho=None
+        self, cvxpy_weights, feature_weights, ratio, q, n_sample, slack, rho=None
     ):
         """
         Builds constraints in the form needed for the cvxpy package 
@@ -382,12 +403,38 @@ class SimulationRestrictions(Restrictions):
             )
         dataset_size = self.dataset.population_df_colinear.shape[0]
 
-        restrictions = [feature_weights @ cvxpy_weights >= n_sample / dataset_size]
+        print("CVPXY RESTRICTIONS")
+        print("self.restriction_matrices[count][0]", self.restriction_matrices["count"][0])
+        print("self.restriction_values[count][0]", self.restriction_values["count"][0])
+        print("self.restriction_matrices[count][1]", self.restriction_matrices["count"][1])
+        print("self.restriction_values[count][1]", self.restriction_values["count"][1])
+        print("cvxpy_weights shape", cvxpy_weights.shape)
+        print("n_samples: ", n_sample)
+        print("dataset_size: ", dataset_size)
+        print("first restriction amount: ", n_sample / dataset_size)
+        print("feature_weights.shape: ", feature_weights.shape)
+        # restrictions = [feature_weights @ cvxpy_weights >= n_sample / dataset_size] # DGG
+        restrictions = [feature_weights @ cvxpy_weights >= 0]
+        # if self.restriction_type == "count":
+        #     restrictions += [ 
+        #         self.restriction_matrices["count"][0] @ cvxpy_weights
+        #         == self.restriction_values["count"][0],
+        #         self.restriction_matrices["count"][1] @ cvxpy_weights
+        #         == self.restriction_values["count"][1],
+        #     ]
+        # epsilon = 1e-2  # Tolerance is needed for the simple case because off the mismatch in conditions
+        # if self.restriction_type == "count":
+        #     restrictions += [
+        #         self.restriction_matrices["count"][0] @ cvxpy_weights
+        #         >= self.restriction_values["count"][0] - epsilon,
+        #         self.restriction_matrices["count"][1] @ cvxpy_weights
+        #         >= self.restriction_values["count"][1] - epsilon,
+        #     ]
         if self.restriction_type == "count":
             restrictions += [
-                self.restriction_matrices["count"][0] @ cvxpy_weights
+                self.restriction_matrices["count"][0] @ cvxpy_weights + slack[0]
                 == self.restriction_values["count"][0],
-                self.restriction_matrices["count"][1] @ cvxpy_weights
+                self.restriction_matrices["count"][1] @ cvxpy_weights + slack[1]
                 == self.restriction_values["count"][1],
             ]
         elif self.restriction_type == "count_minus":
@@ -549,6 +596,7 @@ class SemiSyntheticRestrictions(Restrictions):
                 treatment_level=self.dataset.levels_colinear[0],
             ),
         }
+        
 
         if self.n_cov_pairs and self.restriction_type.startswith("cov"):
             all_cov_vars = self._get_cov_pairs(

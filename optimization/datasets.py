@@ -34,38 +34,119 @@ class SimulationLoaderOurs(DatasetLoader):
         self.correlation_coeff = correlation_coeff
         self.rng = rng
 
+    def download_data(self):
+        data_source = ACSDataSource(survey_year='2023', horizon='1-Year', survey='person')
+        acs_data = data_source.get_data(states=['MI'], download=True)
+
+        data = pd.DataFrame(acs_data)
+        ne_lower_penninsula = 300 # more that 2k, majority clearly dominates
+        detroit_sc_se = 3211 # ~700, minority dominates
+        ann_arbor_puma = 2702 #1.1k majority dominates but not too far from minority
+        
+        PUMA = ann_arbor_puma
+        # _data = data [data['PUMA'] == PUMA]
+        
+        # for all the regions as one
+        _data = data[data['PUMA'].isin([ne_lower_penninsula, detroit_sc_se, ann_arbor_puma])]
+        
+        race_mapping = {
+            1: "White",
+            2: "Black or African American",
+            3: "American Indian",
+            4: "Alaska Native",
+            5: "American Indian and Alaska Native tribes specified",
+            6: "Asian",
+            7: "Native Hawaiian and Other Pacific Islander",
+            8: "Some other race",
+            9: "Two or more races"
+        }
+        race_data = pd.DataFrame()
+        race_data['race'] = _data['RAC1P'].map(race_mapping)
+
+        race_counts = race_data['race'].value_counts()
+        print("Race distribution in Ann Arbor:")
+        print(race_counts)
+
+        # We only care about majority or minority for the time being 
+        # Where we consider White to be the majority
+        race_data['race'] = race_data['race'].apply(
+            lambda x: "majority" if x == "White" else "minority"
+        )
+        race_counts = race_data['race'].value_counts()
+        print("Race distribution in Ann Arbor:")
+        print(race_counts)
+        
+        self.dataset_size = len(race_data)
+        return race_data['race'].tolist()
+    
     def _simulate_dataset(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
         """
-        Simulates the dataset with hospitalization and race probabilities.
+        Simulates the dataset with hospitalization, race, sex, and income probabilities.
         
         Returns:
             Tuple: A tuple containing the population dataset and the observed sample dataset.
         """
+        
+        race_data = self.download_data()
+        # print("HERE")
+        # print("race data: ", race_data)
+        week_50_hospitalization_rates = 0.0870672475147541 + 0.4878451579027989 # state-wide reports
         # Simulate population dataset
         P = pd.DataFrame({
-            'race': self.rng.choice(['majority', 'minority'], size=self.dataset_size, p=[0.7, 0.3]),
-            'hospitalized': self.rng.choice([0, 1], size=self.dataset_size, p=[0.6, 0.4]),
-            'other_outcome': self.rng.choice([0, 1], size=self.dataset_size, p=[0.5, 0.5]) #this to match the dataset format but we are not using it
+            # 'race': self.rng.choice(['majority', 'minority'], size=self.dataset_size, p=[0.7, 0.3]),
+            'race' : race_data,
+            # 'hospitalized': self.rng.choice([0, 1], size=self.dataset_size, p=[0.6, 0.4]),
+            'other_outcome': self.rng.choice([0, 1], size=self.dataset_size, p=[0.5, 0.5])
         })
+        # print("P", P)
+        
+         # Assign the "Hospitalized" column
+        num_hospitalized = int(np.ceil(len(P) * week_50_hospitalization_rates))
+        hospitalized_indices = self.rng.choice(P.index, size=num_hospitalized, replace=False)
+        P['hospitalized'] = 0
+        P.loc[hospitalized_indices, 'hospitalized'] = 1
 
-        # Define observed probabilities for sampling
+        # Add sex attribute
+        P['sex'] = self.rng.choice(['male', 'female'], size=self.dataset_size, p=[0.65, 0.35])
+
+        # Add income attribute based on race
+        def assign_income(row):
+            if row['race'] == 'majority':
+                return self.rng.choice(
+                    ['quite rich', 'moderate', 'little'], 
+                    p=[0.4, 0.5, 0.1]
+                )
+            else:  # minority
+                return self.rng.choice(
+                    ['quite rich', 'moderate', 'little'], 
+                    p=[0.05, 0.6, 0.35]
+                )
+
+        P['income'] = P.apply(assign_income, axis=1)
+
+        # Define observed probabilities for sampling (this is the bias)
         observed_probs = {
             ('majority', 1): 0.7,
             ('minority', 1): 0.3
         }
 
-        # Calculate weights for biased sampling
-        def calculate_weight(row):
-            if row['hospitalized'] == 1:
-                return observed_probs.get((row['race'], row['hospitalized']), 1.0)
-            return 1.0
+        # Calculate the counts for majority and minority in the population
+        majority_count_in_P = P[P['race'] == 'majority'].shape[0]
+        minority_count_in_P = P[P['race'] == 'minority'].shape[0]
 
-        P['weight'] = P.apply(calculate_weight, axis=1)
+        # Determine how many to sample for `Q`
+        majority_sample_count = int(0.7 * majority_count_in_P)
+        minority_sample_count = int(0.3 * minority_count_in_P)
 
-        # Create observed dataset Q with biased sampling
-        Q = P.sample(n=self.dataset_size, weights=P['weight'], replace=True).drop(columns=['weight'])
-        
+        # Sample from the population dataset `P`
+        Q_majority = P[P['race'] == 'majority'].sample(n=majority_sample_count, replace=False, random_state=self.rng)
+        Q_minority = P[P['race'] == 'minority'].sample(n=minority_sample_count, replace=False, random_state=self.rng)
+
+        # Concatenate the two subsets to create `Q`
+        Q = pd.concat([Q_majority, Q_minority]).reset_index(drop=True)
+
         return P, Q
+
 
     def _create_dataframe(self, dataset: pd.DataFrame) -> pd.DataFrame:
         """
@@ -81,6 +162,10 @@ class SimulationLoaderOurs(DatasetLoader):
         df[['majority', 'minority']] = pd.get_dummies(dataset['race'])
         df['hospitalized'] = dataset['hospitalized']
         df['other_outcome'] = dataset['other_outcome']
+
+        df[['male', 'female']] = pd.get_dummies(dataset['sex'])
+        df[['quite rich', 'moderate', 'little']] = pd.get_dummies(dataset['income'])
+
         return df
     
     def _get_ate_conditional_mean(self, A: np.ndarray, y: np.ndarray) -> float:
@@ -94,8 +179,9 @@ class SimulationLoaderOurs(DatasetLoader):
         Returns
             ate: Average treatment effect.
         """
-        conditional_mean = (y * A).sum()
-        return conditional_mean / A.sum()
+        # conditional_mean = (y * A).sum()
+        # return conditional_mean / A.sum()
+        return y.sum() / len(y)
 
     def load(self) -> Dataset:
         """
@@ -106,6 +192,13 @@ class SimulationLoaderOurs(DatasetLoader):
         """
         # Generate the population and observed sample datasets
         P, Q = self._simulate_dataset()
+        
+        # Display counts for race in P and Q
+        print("Population Race Distribution:")
+        print(P['race'].value_counts())
+
+        print("\nObserved Sample Race Distribution:")
+        print(Q['race'].value_counts())
 
         # Create formatted dataframes
         population_df = self._create_dataframe(P)
@@ -119,7 +212,12 @@ class SimulationLoaderOurs(DatasetLoader):
         X = population_df[['majority', 'minority']].values  
         X_raw = sample_df[['majority', 'minority']].values 
         
+        # levels = [
+        #     ['majority', 'minority'],
+        # ]
         levels = [
+            ["female", "male"],
+            ["little", "moderate", "quite rich"],
             ['majority', 'minority'],
         ]
 

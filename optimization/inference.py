@@ -53,6 +53,8 @@ def get_feature_strata(
     for combination in levels_combinations:
         query_string = " & ".join([f"`{level}` == 1" for level in combination])
         strata_dfs[(1,) + combination] = df[df[target] == 1].query(query_string)
+    
+    # print("strata_dfs: ", strata_dfs)
     return strata_dfs
 
 
@@ -294,6 +296,7 @@ def run_search(
     data_count_1 = strata_estimands["count"][1]
 
     alpha = torch.rand(feature_weights.shape[1], requires_grad=True)
+    print("alpha: ", alpha)
     optim = torch.optim.Adam([alpha], 0.01)
     loss_values = []
     n_sample = data_count_1.sum() + data_count_0.sum()
@@ -302,7 +305,9 @@ def run_search(
     for index in tqdm(
         range(n_iters), desc=f"Optimizing Upper Bound: {upper_bound}", leave=False
     ):
-        w = cp.Variable(feature_weights.shape[1])
+        w = cp.Variable(feature_weights.shape[1]) 
+        # w = cp.Variable(feature_weights.shape[1],  nonneg=True) #DGG
+        print("W shape: ", w.shape)
         alpha_fixed = alpha.squeeze().detach().numpy()
 
         ratio = feature_weights @ w
@@ -310,24 +315,34 @@ def run_search(
         q = q.reshape(-1, 1)
         q = torch.flatten(q)
 
-        objective = cp.sum_squares(w - alpha_fixed)
+        # objective = cp.sum_squares(w - alpha_fixed)
+        
+        #using the slack variables 
+        slack0, slack1 = cp.Variable((2,), nonneg=True), cp.Variable((2,), nonneg=True)
+        lambda_ = 0.7  # Balance parameter
+        objective = cp.sum_squares(w - alpha_fixed) + lambda_ * (cp.norm(slack0, 1) + cp.norm(slack1, 1))
+
         cvxpy_restrictions = restrictions.get_cvxpy_restrictions(
             cvxpy_weights=w,
             feature_weights=feature_weights,
             ratio=ratio,
             q=q,
             n_sample=n_sample,
+            slack = [slack0, slack1],
             rho=rho,
         )
         print("cvxpy_restrictions: ", cvxpy_restrictions)
         prob = cp.Problem(cp.Minimize(objective), cvxpy_restrictions)
         prob.solve()
 
+        print(f"Solver status: {prob.status}")
         if w.value is None:
             print("\nOptimization failed.\n")
             break
         
         print("Value for W", w.value)
+        print("slack0:", slack0.value)
+        print("slack1:", slack1.value)
         
         alpha.data = torch.tensor(w.value).float()
         weights_y1 = (feature_weights @ alpha).reshape(*data_count_1.shape)
@@ -475,6 +490,7 @@ if __name__ == "__main__":
                 strata_dfs=strata_dfs_alternate_outcome, levels=dataset.levels_colinear
             ),
         }
+        print("strata_estimands: ", strata_estimands)
         if config.n_cov_pairs and restriction_type.startswith("cov"):
             strata_estimands["cov"] = get_strata_covs(
                 strata_dfs=strata_dfs,
@@ -491,6 +507,7 @@ if __name__ == "__main__":
         feature_weights, _ = parametrization.get_feature_weights(
             levels=dataset.levels_colinear,
         )
+        print("feature weights: ", feature_weights)
 
         restrictions.build_restriction_matrices(
             feature_weights=feature_weights, strata_estimands=strata_estimands
