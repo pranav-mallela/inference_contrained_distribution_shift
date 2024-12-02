@@ -43,11 +43,11 @@ class SimulationLoaderOurs(DatasetLoader):
         detroit_sc_se = 3211 # ~700, minority dominates
         ann_arbor_puma = 2702 #1.1k majority dominates but not too far from minority
         
-        PUMA = ann_arbor_puma
-        # _data = data [data['PUMA'] == PUMA]
+        PUMA = ne_lower_penninsula
+        _data = data [data['PUMA'] == PUMA]
         
         # for all the regions as one
-        _data = data[data['PUMA'].isin([ne_lower_penninsula, detroit_sc_se, ann_arbor_puma])]
+        # _data = data[data['PUMA'].isin([ne_lower_penninsula, detroit_sc_se, ann_arbor_puma])]
         
         race_mapping = {
             1: "White",

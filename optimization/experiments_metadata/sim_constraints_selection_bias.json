@@ -1,10 +1,6 @@
 {
     "random_seeds": [
-        1,
-        2,
-        3,
-        4,
-        5
+        1
     ],
     "dataset_type": "simulation_selection_bias",
     "correlation_coeff": 1,
@@ -12,7 +8,7 @@
     "feature_names": null,
     "states": null,
     "n_trials": 1,
-    "n_optim_iters": 5,
+    "n_optim_iters": 3000,
     "restriction_trials": [
         "count"
     ],
