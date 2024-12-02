@@ -3,6 +3,66 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CSE 598 Final Project</title>
+    <style>
+        /* Global styles */
+        * {
+            margin: 10;
+            padding: 10;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+        }
+
+        header {
+            background: #007bff;
+            color: white;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        nav {
+            display: flex;
+            justify-content: center;
+            background: #0056b3;
+            padding: 0.5rem;
+        }
+
+        nav a {
+            color: white;
+            text-decoration: none;
+            margin: 0 1rem;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+        }
+
+        nav a:hover {
+            background: #003d7a;
+        }
+
+        main {
+            padding: 2rem;
+            background: white;
+            margin: 1rem auto;
+            max-width: 800px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        footer {
+            text-align: center;
+            background: #007bff;
+            color: white;
+            padding: 1rem;
+            margin-top: 2rem;
+        }
+    </style>
 </head>
 <body>
     <h1>Exploring ODE Simulations to Learn Selection Bias</h1>
@@ -12,15 +72,20 @@
         This paper aims to underscore the importance of considering region-specific aspects when correcting for selection bias. Leveraging the SEIR model for epidemic simulations, we generate compartmentalized data that reflects individual-level heterogeneity in infection and contact patterns. From this, we simulate the biased reporting process to create an observed dataset that diverges from the true distribution due to systematic underrepresentation of certain demographic groups. This is done using an indicator variable to simulate region-specific selection bias and demographic disparities. Utilizing existing models for selection bias, we show that the models do not capture selection bias with the required characterization, and provide trivial or inaccurate solutions. We call for methods such as differentiable agent-based models to incorporate the underlying principles of selection bias. We also present future directions of research including a spatio-temporal perspective which can help policy makers identify true metrics and take more informed decisions. 
     </p>
     <hr>
+    <b>Results:</b>
+    <br>
+    <img src="simulated_data.png">
     <p>
-        <b>Results:</b>
-        Insert results here.
+        The sampling (or bias) for each region is the same with preference to the majority class, specifically 70% for the majority class is observed while only 30% of the minority class is observed. In the figure, Region 0 corresponds to the NE Lower Peninsula, Region 1 corresponds to the Detroit South Central South East, and Region 2 corresponds to the Ann Arbor area. Region 3 is the combination of regions 0-2. Also, true conditional mean refers to the fraction of individuals sampled from the true distribution who were hospitalized and belonged to the majority demographic. Empirical conditional mean refers to the same category of individuals sampled from the biased distribution.
     </p>
-    <a href="https://umich.edu/">Link to paper</a>
+    <p>
+        In Region 0, we see that the empirical mean almost overlaps with true mean. This is expected as Region 0 is mainly populated by the state-wide majority demographic, who have a large sampling probability  (0.7). Hence, the bias induced in this region is not significant.  In addition, the optimization is guided by constraints dependent on the minority population, resulting in loose bounds for Region 0. This explains the tight bounds of the conditional mean in Region 1, where the state-wide minority demographic form the majority. While we expect all means to lie within the calculated bounds, Region 1 has the true mean outside the bound. This is believed to be due to the dataset size, in order to get a good approximation of the true mean value we should have a sufficient number of samples. This phenomenon is yet to be fully explored; we also believe this can be a limitation of constraint optimization methods to solve the problem of selection bias. In Region 2, we see that although the bounds are not as tight as in Region 1, they are tighter than in Region 0 due to the diverse demographic representation in that region. Finally, in Region 3 (the combined region), we see the most loose bounds. This can be explained by the overwhelming over-representation of the state-wide majority. Clearly, this leads to an oversight to the region-specific population densities and racial diversities. This underscores the need to incorporate this information into future methods while correcting public health datasets for selection bias.
+    </p>
+    <a href="https://drive.google.com/file/d/1qBCP8RUeY1HtOMEuRjJoOJk858d4zr5H/view?usp=sharing">Link to paper</a>
     <br>
-    <a href="https://umich.edu/">Link to presentation slides</a>
+    <a href="https://drive.google.com/file/d/1YVYjfzP5hn8hdx-LouWl_NA29LzijfDq/view?usp=sharing">Link to presentation slides</a>
     <br>
-    <a href="https://umich.edu/">Link to software</a>
+    <a href="https://github.com/pranav-mallela/inference_contrained_distribution_shift">Link to software</a>
     <br>
     <br>
     <b>Authors:</b>
